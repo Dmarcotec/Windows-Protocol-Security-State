@@ -77,7 +77,7 @@ $zahl = 0
 
 
 # For testing purposes, here one computer can be specified and only that one will be queried
-# $computers = 'srv-ada-01'
+# $computers = 'win-2022-01'
 
  
 
@@ -113,7 +113,7 @@ foreach ($c in $computers) {
     
      
       # read the registry for SMB parameters 1
-      $SMBPara = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters -Name "*"}
+      $SMBPara = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' -Name "*"}
 
       # make the parameters readable
         if ($SMBPara.SMB1 -eq "0") {
@@ -137,7 +137,7 @@ foreach ($c in $computers) {
 
        # read the registry for SMB Signing parameters
  
-       $SMBParaC = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters -Name "*"}
+       $SMBParaC = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name "*"}
          
          # make the parameters readable
          if ($SMBParaC.RequireSecuritySignature -eq 0) {
@@ -165,10 +165,15 @@ foreach ($c in $computers) {
                   $row.LLMNR = $LLMNR_On.EnableMulticast
                 }
                   
-
+      # SMB1 Feature installed?
       $smb = Invoke-Command -ComputerName $c -ErrorAction SilentlyContinue {Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol | select State} | select state
       $row.SMBv1_Feature = $smb.state
+      
+      
+      # LDAP Signing
       $ldapsign = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\ldap -Name "*"}
+
+      # make the parameter readable
       if ($ldapsign.ldapclientintegrity -eq 1) {
         $row.LDAP_Signing = 'Optional'
         }
@@ -180,7 +185,10 @@ foreach ($c in $computers) {
              $row.LDAP_Signing = $ldapsign.ldapclientintegrity
             }
 
+        # Netbios
         $NetBios = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-WmiObject win32_networkadapterconfiguration -filter 'IPEnabled=true' | select Description, TcpipNetbiosOptions}
+        
+        # make parameters readable
         if ($NetBios.TcpipNetbiosOptions -eq 0) {
         $row.NetBIOS = 'By DHCP'
         }
@@ -191,8 +199,13 @@ foreach ($c in $computers) {
             } else {
               $row.NetBIOS = $NetBios.TcpipNetbiosOptions
             }
+
+
+        # NTLM - Lanmanager Authentication Level
+
         $NTLM_Level = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path "HKLM:SYSTEM\CurrentControlSet\Control\Lsa" -Name "lmcompatibilitylevel"}
-        $NTLM_Level.lmcompatibilitylevel
+        
+        # make the parameter readable
         if ($NTLM_Level.lmcompatibilitylevel -eq 1) {
           $row.NTLM_level = 'Bad'
           } elseif ($NTLM_Level.lmcompatibilitylevel -eq 2) {
@@ -210,11 +223,11 @@ foreach ($c in $computers) {
                       }
 
 
-                      # Restrict NTLM: Incoming and NTLM traffic
+       # Restrict NTLM: Incoming and NTLM traffic
 
        $RestrNTLMTraffic = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path "HKLM:System\CurrentControlSet\Control\Lsa\MSV1_0"}
        
-       # Incoming NTLM traffic
+       # make parameter readable: Incoming NTLM traffic
        if ($RestrNTLMTraffic.restrictreceivingntlmtraffic -eq 0) {
           $row.Restrict_NTLM_Incoming = 'Allow All'
           } elseif ($RestrNTLMTraffic.restrictreceivingntlmtraffic -eq 1) {
@@ -227,7 +240,7 @@ foreach ($c in $computers) {
                       $row.Restrict_NTLM_Incoming = $RestrNTLMTraffic.restrictreceivingntlmtraffic  
                     }
 
-       # Outgoing NTLM traffic
+       # make parameter readable: Outgoing NTLM traffic
        if ($RestrNTLMTraffic.restrictsendingntlmtraffic -eq 0) {
           $row.Restrict_NTLM_Outgoing = 'Allow All'
           } elseif ($RestrNTLMTraffic.restrictsendingntlmtraffic -eq 1) {
@@ -243,27 +256,27 @@ foreach ($c in $computers) {
 
       else {
 
-        "Computer $c ist kein Windows-Computer" | Write-Host -ForegroundColor Yellow
+        "Computer $c is no Windows Computer" | Write-Host -ForegroundColor Yellow
 
       }
 
       ""
       }
 
-    # andernfalls...
+    # if it is not pingable
 
     else {
-    "$c ist nicht erreichbar." | Write-Host -ForegroundColor Red
-    $row.Pingable = "Nein"
+    "$c is not pingable" | Write-Host -ForegroundColor Red
+    $row.Pingable = "No"
     }
     $table.Rows.Add($row)
 }
 
-# zeige Ergebnisse an
+# show results
 
 $table | Format-Table -Autosize
 
-# gebe Ergebnisse in Datei aus (Pfadangabe oben)
+# export results to csv
 
 $table | Export-Csv -Path $csvpath\$csvname -Delimiter ';' -NoTypeInformation -Encoding UTF8
 
@@ -271,5 +284,5 @@ $table | Out-GridView
 
 
 } else {
-  Write-Host "Pfad zum Speichern der Ergebnisdatei nicht vorhanden: $csvpath"
+  Write-Host "Path for saving the results does not exist: $csvpath"
 }
