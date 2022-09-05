@@ -113,7 +113,17 @@ foreach ($c in $computers) {
     
      
       # read the registry for SMB parameters 1
-      $SMBPara = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' -Name "*"}
+      $SMBPara, $SMBParaC, $LLMNR_On, $smb, $ldapsign, $NetBios, $NTLM_Level, $RestrNTLMTraffic = Invoke-Command -computername $c -ErrorAction SilentlyContinue {
+        Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' -Name "*"
+        Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name "*"
+        Get-ItemProperty -Path 'HKLM:\Software\policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast'
+        Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol | select State
+        Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\ldap -Name "*"
+        Get-WmiObject win32_networkadapterconfiguration -filter 'IPEnabled=true' | select Description, TcpipNetbiosOptions
+        Get-ItemProperty -Path "HKLM:SYSTEM\CurrentControlSet\Control\Lsa" -Name "lmcompatibilitylevel"
+        Get-ItemProperty -Path "HKLM:System\CurrentControlSet\Control\Lsa\MSV1_0"
+
+        }
 
       # make the parameters readable
         if ($SMBPara.SMB1 -eq "0") {
@@ -137,7 +147,7 @@ foreach ($c in $computers) {
 
        # read the registry for SMB Signing parameters
  
-       $SMBParaC = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name "*"}
+     
          
          # make the parameters readable
          if ($SMBParaC.RequireSecuritySignature -eq 0) {
@@ -149,7 +159,7 @@ foreach ($c in $computers) {
           }
 
       # read the registry for Link-local Multicast setting
-      $LLMNR_On = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path 'HKLM:\Software\policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast'}
+    
       
       # make the parameters readable
         
@@ -166,13 +176,11 @@ foreach ($c in $computers) {
                 }
                   
       # SMB1 Feature installed?
-      $smb = Invoke-Command -ComputerName $c -ErrorAction SilentlyContinue {Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol | select State} | select state
+     
       $row.SMBv1_Feature = $smb.state
       
       
       # LDAP Signing
-      $ldapsign = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\ldap -Name "*"}
-
       # make the parameter readable
       if ($ldapsign.ldapclientintegrity -eq 1) {
         $row.LDAP_Signing = 'Optional'
@@ -186,8 +194,6 @@ foreach ($c in $computers) {
             }
 
         # Netbios
-        $NetBios = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-WmiObject win32_networkadapterconfiguration -filter 'IPEnabled=true' | select Description, TcpipNetbiosOptions}
-        
         # make parameters readable
         if ($NetBios.TcpipNetbiosOptions -eq 0) {
         $row.NetBIOS = 'By DHCP'
@@ -202,9 +208,6 @@ foreach ($c in $computers) {
 
 
         # NTLM - Lanmanager Authentication Level
-
-        $NTLM_Level = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path "HKLM:SYSTEM\CurrentControlSet\Control\Lsa" -Name "lmcompatibilitylevel"}
-        
         # make the parameter readable
         if ($NTLM_Level.lmcompatibilitylevel -eq 1) {
           $row.NTLM_level = 'Bad'
@@ -225,7 +228,7 @@ foreach ($c in $computers) {
 
        # Restrict NTLM: Incoming and NTLM traffic
 
-       $RestrNTLMTraffic = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path "HKLM:System\CurrentControlSet\Control\Lsa\MSV1_0"}
+       #$RestrNTLMTraffic = Invoke-Command -computername $c -ErrorAction SilentlyContinue {Get-ItemProperty -Path "HKLM:System\CurrentControlSet\Control\Lsa\MSV1_0"}
        
        # make parameter readable: Incoming NTLM traffic
        if ($RestrNTLMTraffic.restrictreceivingntlmtraffic -eq 0) {
@@ -244,9 +247,9 @@ foreach ($c in $computers) {
        if ($RestrNTLMTraffic.restrictsendingntlmtraffic -eq 0) {
           $row.Restrict_NTLM_Outgoing = 'Allow All'
           } elseif ($RestrNTLMTraffic.restrictsendingntlmtraffic -eq 1) {
-              $row.Restrict_NTLM_Outgoing = 'Deny Domain Accounts'
+              $row.Restrict_NTLM_Outgoing = 'Audit All'
             } elseif ($RestrNTLMTraffic.restrictsendingntlmtraffic -eq 2) {
-                $row.Restrict_NTLM_Outgoing = 'Deny All Accounts'
+                $row.Restrict_NTLM_Outgoing = 'Deny All'
               } elseif (-not $RestrNTLMTraffic.restrictsendingntlmtraffic) {
                   $row.Restrict_NTLM_Outgoing = 'Allow All'
                   } else {
