@@ -7,5 +7,5 @@ It can be helpful for an overview o the hardening state. The results can be seen
 I know the code is not very graceful in the release, but it is working and it is not finished yet.
 
 
-
-![Here an example for the results:](results001.JPG)
+Here an example output:
+![](results001.JPG)
