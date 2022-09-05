@@ -5,5 +5,5 @@ This script began with 5 lines to query the SMB1 state of Windows Computers in a
 I know it is not very graceful in that state, but it is not finished yet.
 
 
-Here an example for the results:
-!(https://github.com/Dmarcotec/Windows-Protocol-Security-State/blob/main/results001.JPG)
+
+![Here an example for the results:](main/results001.JPG)
